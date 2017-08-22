@@ -18,13 +18,12 @@ type App struct {
 const (
 	dbUser     = "A_nonymous"
 	dbPassword = "postgres"
-	dbName     = "test"
 )
 
 // Initialize function starts the application
-func (a *App) Initialize() {
+func (a *App) Initialize(name string) {
 	connectionString :=
-		fmt.Sprintf("user=%s password=%s dbname=%s sslmode=disable", dbUser, dbPassword, dbName)
+		fmt.Sprintf("user=%s password=%s dbname=%s sslmode=disable", dbUser, dbPassword, name)
 	var err error
 	a.DB, err = sql.Open("postgres", connectionString)
 	if err != nil {
