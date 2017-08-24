@@ -4,10 +4,12 @@ package main_test
 import (
 	"bytes"
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 
 	"."
@@ -34,8 +36,16 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
+
 func ensureTableExists() {
-	if _, err := a.DB.Exec(tableCreationQuery); err != nil {
+	sql, err := ioutil.ReadFile("./build.sql")
+	check(err)
+	if _, err := a.DB.Exec(string(sql)); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -108,5 +118,53 @@ func TestCreateStartup(t *testing.T) {
 
 	if m["id"] != 1.0 {
 		t.Errorf("Expected startup ID to be '1'. Got '%v'", m["id"])
+	}
+}
+
+func TestGetStartup(t *testing.T) {
+	clearTable()
+	addStartup(1)
+
+	req, _ := http.NewRequest("GET", "startup", nil)
+	response := executeRequest(req)
+
+	checkResponseCode(t, http.StatusOK, response.Code)
+}
+
+func addStartup(count int) {
+	if count < 1 {
+		count = 1
+	}
+	for i := 0; i < count; i++ {
+		a.DB.Exec("INSERT INTO startups(name, category) VALUES($1, $2)", "Startup "+strconv.Itoa(i), (i+1.0)*10)
+	}
+}
+
+func TestUpdateStartup(t *testing.T) {
+	clearTable()
+	addStartup(1)
+
+	req, _ := http.NewRequest("GET", "/startup/startup", nil)
+	response := executeRequest(req)
+	var originalStartup map[string]interface{}
+	json.Unmarshal(response.Body.Bytes(), &originalStartup)
+
+	payload := []byte(`{"name": "test startup - updated name", "category": "new category"}`)
+
+	req, _ = http.NewRequest("PUT", "/startup/startup", bytes.NewBuffer(payload))
+	response = executeRequest(req)
+	checkResponseCode(t, http.StatusOK, response.Code)
+
+	var m map[string]interface{}
+	json.Unmarshal(response.Body.Bytes(), &m)
+
+	if m["id"] != originalStartup["id"] {
+		t.Errorf("Expected the id to remain the same (%v). Got %v", originalStartup["id"], m["id"])
+	}
+	if m["name"] == originalStartup["name"] {
+		t.Errorf("Expected the name to from '%v' to '%v'. Got '%v'", originalStartup["name"], m["name"], m["name"])
+	}
+	if m["category"] == originalStartup["category"] {
+		t.Errorf("Expected the category to change from '%v' to '%v'. Got '%v'", originalStartup["category"], m["category"], m["category"])
 	}
 }
