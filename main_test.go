@@ -1,5 +1,5 @@
 // Package main_test provides test for the application
-package main_test
+package main
 
 import (
 	"bytes"
@@ -11,22 +11,11 @@ import (
 	"os"
 	"strconv"
 	"testing"
-
-	"."
 )
 
-var a main.App
-
-const tableCreationQuery = `CREATE TABLE IF NOT EXISTS startups
-(
-id SERIAL,
-name TEXT NOT NULL,
-category TEXT NOT NULL,
-CONSTRAINT startups_pkey PRIMARY KEY (id)
-)`
+var a App
 
 func TestMain(m *testing.M) {
-	a = main.App{}
 	a.Initialize("explorer_test")
 	ensureTableExists()
 	code := m.Run()
@@ -45,6 +34,7 @@ func check(e error) {
 func ensureTableExists() {
 	sql, err := ioutil.ReadFile("./build.sql")
 	check(err)
+
 	if _, err := a.DB.Exec(string(sql)); err != nil {
 		log.Fatal(err)
 	}
@@ -99,7 +89,7 @@ func TestGetNonExistentStartup(t *testing.T) {
 func TestCreateStartup(t *testing.T) {
 	clearTable()
 
-	payload := []byte(`{"name:":"test startup", "label": "AI"}`)
+	payload := []byte(`{"name:":"test startup", "category": "AI"}`)
 	req, _ := http.NewRequest("POST", "/startup", bytes.NewBuffer(payload))
 	response := executeRequest(req)
 
@@ -112,8 +102,8 @@ func TestCreateStartup(t *testing.T) {
 		t.Errorf("Expected startup name to be 'test startup'. Got '%v'", m["name"])
 	}
 
-	if m["label"] != "AI" {
-		t.Errorf("Expected startup name to be 'AI'. Got '%v'", m["label"])
+	if m["category"] != "AI" {
+		t.Errorf("Expected startup name to be 'AI'. Got '%v'", m["category"])
 	}
 
 	if m["id"] != 1.0 {
@@ -136,7 +126,7 @@ func addStartup(count int) {
 		count = 1
 	}
 	for i := 0; i < count; i++ {
-		a.DB.Exec("INSERT INTO startups(name, category) VALUES($1, $2)", "Startup "+strconv.Itoa(i), (i+1.0)*10)
+		a.DB.Exec("INSERT INTO startups(name, category) VALUES($1, $2)", "Startup "+strconv.Itoa(i), "AI")
 	}
 }
 
