@@ -4,8 +4,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,27 +15,12 @@ var a App
 
 func TestMain(m *testing.M) {
 	a.Initialize("explorer_test")
-	ensureTableExists()
+	EnsureTableExists(a.DB)
 	code := m.Run()
 
 	clearTable()
 
 	os.Exit(code)
-}
-
-func check(e error) {
-	if e != nil {
-		panic(e)
-	}
-}
-
-func ensureTableExists() {
-	sql, err := ioutil.ReadFile("./build.sql")
-	check(err)
-
-	if _, err := a.DB.Exec(string(sql)); err != nil {
-		log.Fatal(err)
-	}
 }
 
 func clearTable() {

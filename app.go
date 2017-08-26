@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
@@ -19,10 +20,32 @@ type App struct {
 	DB     *sql.DB
 }
 
+// Options represent the server config options
+type Options struct {
+	path string
+	port string
+}
+
 const (
 	dbUser     = "A_nonymous"
 	dbPassword = "postgres"
 )
+
+// EnsureTableExists creates the startup table if it doesn't already exist
+func EnsureTableExists(db *sql.DB) {
+	sql, err := ioutil.ReadFile("./build.sql")
+	check(err)
+
+	if _, err := db.Exec(string(sql)); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
 
 // getStartup gets the variables from the request respondWithError if any err otherwise it responds with the result
 func (a *App) getStartup(w http.ResponseWriter, r *http.Request) {
@@ -111,14 +134,53 @@ func (a *App) Initialize(name string) {
 
 }
 
+func (a *App) updateStartup(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid ID")
+		return
+	}
+	var s startup
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&s); err != nil {
+		respondWithError(w, http.StatusBadRequest, "invalid request payload")
+		return
+	}
+
+	defer r.Body.Close()
+	s.ID = id
+
+	if err := s.updateStartup(a.DB); err != nil {
+		respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondWithJSON(w, http.StatusOK, s)
+}
+
 // InitializeRoutes creates handlers for the different application routes
 func (a *App) InitializeRoutes() {
 	a.Router.HandleFunc("/startups", a.getStartups).Methods("GET")
 	a.Router.HandleFunc("/startup", a.createStartup).Methods("POST")
 	a.Router.HandleFunc("/startup/{id:[0-9]+}", a.getStartup).Methods("GET")
+	a.Router.HandleFunc("/startup/{id:[0-9]+}", a.updateStartup).Methods("PUT")
+}
+
+// Log wraps each handler function in a logger function which prints
+// the remote address, method and url
+func Log(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Printf("%s %s %s\n", r.RemoteAddr, r.Method, r.URL)
+		handler.ServeHTTP(w, r)
+	})
 }
 
 // Run function starts the app on a given port
 func (a *App) Run(addr string) {
-	log.Fatal(http.ListenAndServe(":8000", a.Router))
+	op := &Options{port: ":8001"}
+	fmt.Printf("Looking out for new startups on %s", op.port)
+	err := http.ListenAndServe(op.port, Log(a.Router))
+	if err != nil {
+		log.Fatal("ListenAndServe: ", err)
+	}
 }
